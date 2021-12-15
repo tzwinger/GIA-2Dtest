@@ -10,7 +10,7 @@ Files:
 - `cleanup.sh` ... script that cleans out any objects, mesh-files and results (!!)
 - `2layer_ice.geo` ... input file for 
 - `2layer_ice.sif` ... the main solver input file
-- `parameter.sif` ... definition of run parameters (in LUA sytax)
+- `parameter.sif` ... definition of run parameters (in LUA syntax)
 - `ELMERSOLVER_STARTINFO` ... startinfo file for Elmre run
 - `deform.lua` ... definition of needed LUA functions 
 - `buelerprofile.f90` ... source code for generating the imposed Bueler profile
