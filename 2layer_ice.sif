@@ -1,0 +1,299 @@
+!!!!!!!!!!!!!!!!!!!!!!!!
+!!! Toy model 2D for GIA
+!!! driven by an ice sheet
+!!! in form of a
+!!! Bueler profile
+!!! copyleft T. Zwinger
+!!! CSC - IT Centrer for Science
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!echo on
+
+!! read in parameters of the run
+!! ------------------------------
+include parameter.sif
+
+$name="2layer_ice"
+
+
+!---LUA BEGIN
+! assert(loadfile('./deform.lua'))()
+!---LUA END
+
+
+Header
+  Mesh DB "." "2layer_ice"
+End
+!==============================================================================
+!-------------------------------- CONSTANTS -----------------------------------
+!==============================================================================
+Constants
+  The answer to all end everything = Integer 42
+End
+!==============================================================================
+!-------------------------------- SIMULATION ----------------------------------
+!==============================================================================
+Simulation
+  Max Output Level = 5
+  Coordinate System = String Cartesian 2D
+  
+
+  Steady State Min Iterations = 1
+  Steady State Max Iterations = 1
+
+
+  Simulation Type = Transient
+  Timestep Sizes(1) =  #tstp*spy
+  Timestep Intervals(1) = #2*itvls
+  Output Intervals(1) = #itvls
+  BDF Order = 2
+  Timestepping Method = BDF
+  !uncomment next line, if you want to have restart file written
+  !Output File = $name".results"
+End
+
+!==============================================================================
+!--------------------------------- BODIES  ------------------------------------
+!==============================================================================
+!ice
+Body 1
+  Name = "Ice"
+  Equation = 1
+  Body Force = 1
+  Material = 1
+  Initial Condition = 1
+End
+
+!Lithosphere
+Body 2
+  Equation  = 2
+  Material = 2
+  Body Force = 2
+  Initial Condition = 2
+End
+
+!Upper mantle 1
+Body 3
+  Equation  = 2
+  Material = 3
+  Body Force = 3
+  Initial Condition = 2
+End
+
+!==============================================================================
+!---------------- MATERIALS ----------------------
+!==============================================================================
+Material 1
+  Name = "Ice Material"
+  Density = Real #rhoi
+End
+! Lithosphere
+Material 2
+  Density =  #rhol
+  Damping = Real 0.0
+  Youngs Modulus = #ymodl
+  ! supper high viscosity, hence,
+  ! Maxwell time is such that it acts elastic
+  Viscosity = #viscl
+  Poisson Ratio = Real 0.49 !not needed if incompressible
+End
+! Upper Mantle 1
+Material 3
+  Density =  #rhoa
+  Damping = Real 0.0
+  Youngs Modulus = #ymoda
+  Viscosity = #visca
+  Poisson Ratio = Real 0.49
+End
+!==============================================================================
+!--------------------------- INITIAL CONDITIONS -------------------------------
+!==============================================================================
+Initial Condition 1
+  IsStructured = Real 1.0
+End
+
+Initial Condition 2
+  d 1 = Real 0.0
+  d 2 = Real 0.0
+End
+
+!==============================================================================
+!---------------- BODY FORCES ----------------------
+!==============================================================================
+Body Force 1
+  Name = "Ice Bodyforce"
+  Flow BodyForce 1 = Real 0
+  Flow BodyForce 2 = Real #-gravity
+End
+! Lithosphere
+Body Force 2
+ Stress BodyForce 1 =  0.0
+ Stress BodyForce 2 =  0.0
+ Gravitational Prestress Advection = Logical True
+ GPA Coeff = Real # rhol * gravl 
+End
+!Upper Mantle 1
+Body Force 3
+ Stress BodyForce 1 =  0.0
+ Stress BodyForce 2 =  0.0
+ Gravitational Prestress Advection = Logical True
+ GPA Coeff = Real # rhoa * grava
+End
+
+!==============================================================================
+!---------------- EQUATIONS ----------------------
+!==============================================================================
+Equation 1
+  Active Solvers(3) = 1 2 3
+  !Plane Stress = True
+End
+
+Equation 2
+  Active Solvers(2) = 4 5
+  !Plane Stress = True
+End
+
+!==============================================================================
+!---------------- SOLVERS --------------------------
+!==============================================================================
+! /// Set mask for strucutred part  ///
+!==============================================================================
+Solver 1
+   Equation = "ProvideMask"
+   Variable = -dofs 1 "IsStructured"
+   Procedure = "DummySolver.so" "DummySolver"
+   Exec Solver = "Before Simulation"
+End
+!==============================================================================
+! /// Extract to Bueler profile ///
+!==============================================================================
+Solver 3
+  Equation = "Structured Mesh Update"
+  Exec Solver = "Before Timestep"  
+  Procedure = "StructuredMeshMapper" "StructuredMeshMapper"
+  Active Coordinate = Integer 2
+  Mesh Velocity Variable = String "dSdt"
+  Mesh Update Variable = String "dS"
+  Mesh Velocity First Zero = Logical True
+  Mapping Mask Variable = String "IsStructured"
+  Dot Product Tolerance = 1.0e-03
+  Minimum Height = Real #MINH
+  Bubbles in global system = False
+End
+!==============================================================================
+! /// Depth/Height on structured mesh ///
+!==============================================================================
+Solver 2
+  Equation = "HeightDepth"
+  Procedure = "StructuredProjectToPlane" "StructuredProjectToPlane"
+  Exec Solver = "Before TimeStep"
+  Active Coordinate = Integer 2
+  Operator 1 = "depth"
+  Operator 2 = "height"
+  Variable 3 = "d 2"
+  Operator 3 = "bottom"
+  Mapping Mask Variable = String "IsStructured"
+  Dot Product Tolerance = 1.0e-03
+  Bubbles in global system = False
+End
+!==============================================================================
+! /// Visco-elastic solver ///
+!==============================================================================
+Solver 4
+  Equation = "Elasticity Analysis"
+  Procedure = "StressSolve" "StressSolver"
+
+  Displace Mesh = Logical True ! physically deform the mesh?
+  
+  Calculate Stresses = Logical True ! outputs elastic stresses
+
+  ! 2D: 2 deformation 1 pressure (as incompressible)
+  Variable = String "t[d:2 p:1]"
+  
+  ! if using p:1 and bubbles, then either b:3 or b:6
+  !  Element = "p:1 b:3 "
+  ! best to use p:2 for deformation (pressure will be p:1)
+  Element = "p:2"
+
+  ! Visco-elastic computation if True
+  Maxwell material = Logical True
+  Incompressible = Logical True
+  Time Derivative Order = 1
+
+  ! Numerical settings (here direct Solver)
+  Linear System Solver = Direct
+  Linear System Direct Method = MUMPS
+  Steady State Convergence Tolerance= 1.0e-5
+End
+!==============================================================================
+! /// Write results ///
+!==============================================================================
+Solver 5
+  Procedure = "ResultOutputSolve" "ResultOutputSolver"
+  Exec Solver = After Timestep
+  Exec Interval = #output
+  Output Format = vtu
+  Output File Name = $name
+  !Discontinuous Galerkin = True
+  !Save Bulk Only = True
+  Save Geometry Ids = True
+End
+
+!==============================================================================
+!--------------------------- BOUNDARY CONDITIONS ------------------------------
+!==============================================================================
+Boundary Condition 1
+  Name = "free surface"
+  Target Boundaries(1) = 1
+   Top Surface = Variable Coordinate 1
+     Real Procedure "buelerprofile" "Bueler_t"
+  Bueler Offset Distance = Real 0.0
+  Bueler Reference Length = Variable "Time"
+     Real Lua "lengthovertime(tx[0])"
+  Bueler Reference Height = Variable "Time",  "bottom d 2"
+     Real Lua "heightovertime(tx[0]) + tx[1]"
+  Bueler Minimum Height = Variable "bottom d 2"
+     Real LUA "tx[0] + MINH"
+  Bueler Offset Time = Real 0.0
+End
+
+Boundary Condition 2
+  Name = "side left"
+  Target Boundaries(1) = 2
+End
+
+Boundary Condition 3
+  Name = "side left"
+  Target Boundaries(1) = 3
+End
+
+Boundary Condition 4
+  Name = "loaded surface"
+  Target Boundaries(1) = 4
+! placing a 100m thick glacier on top of surface with a size of 30 km
+! from centre for the first 10 years and then stop
+  Normal Force = Variable depth
+     Real lua "IfThenElse(tx[0] > 100.0, -tx[0]*rhoi*gravity,0.0)"
+  Bottom Surface = Equals "d 2"
+End
+
+Boundary Condition 5
+  Name = "lower mantle"
+  Target Boundaries(1) = 5
+  d 1 = Real 0
+  d 2 = Real 0
+End
+
+Boundary Condition 6
+  Name = "centre-symmetry"
+  Target Boundaries(1) = 6 
+  d 1 = Real 0
+End
+
+Boundary Condition 7
+  Name = "far-field"
+  Target Boundaries(1) = 7
+  d 1 = Real 0
+  d 2 = Real 0
+End
+
+

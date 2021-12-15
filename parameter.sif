@@ -1,0 +1,35 @@
+! constants
+!----------
+#spy = 365.25*24.0*3600.0
+! Lithosphere and Asthenosphere
+!-----------------------------
+#rhol = 3233.6
+#rhoa = 3367.12
+#gravity = 9.81
+#gravl = 9.987630567
+#grava = 9.939356456
+#viscl = 1.0E44
+#visca = 1.0E19
+#ymodl = 1.8388e+11
+#ymoda = 1.9941e+11
+! Bueler-profile (all in m)
+!-------------------------
+#maxlength = 300.0*1000.0
+#maxheight = 1500.0
+#offsettime = 0.0
+#T0 = 273.15
+#MINH = 10.0
+! ice
+!----
+#rhoi = 917.0
+#A1 = 2.89165e-13
+#A2 = 2.42736e-02
+#Q1 = 60.0e3
+#Q2 = 115.0e3
+#Arrheniusfactor = 1.0E-24
+! timestepping
+!-------------
+#tstp=10.0
+#timespan=5000
+#itvls=timespan/tstp
+#output=100/tstp
